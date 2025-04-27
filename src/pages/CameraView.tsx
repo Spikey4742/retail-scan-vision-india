@@ -1,7 +1,8 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Camera, CameraResultType, CameraSource } from '@capacitor/camera';
 import Header from '@/components/Header';
 import Button from '@/components/Button';
 import { tensorflowHelper } from '@/utils/tensorflowHelper';
@@ -11,18 +12,44 @@ const CameraView = () => {
   const navigate = useNavigate();
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [cameraActive, setCameraActive] = useState(true);
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Request camera permissions when component mounts
+    const requestPermissions = async () => {
+      try {
+        const permissions = await Camera.requestPermissions();
+        if (permissions.camera !== 'granted') {
+          toast.error("Camera permission is required to scan items");
+        }
+      } catch (error) {
+        console.error("Error requesting camera permissions:", error);
+        toast.error("Failed to access camera. Please check your permissions.");
+      }
+    };
+
+    requestPermissions();
+  }, []);
 
   const handleCapture = async () => {
     setIsAnalyzing(true);
     
     try {
-      // In a real app, this would capture an actual image and save its URI
-      // For our mock app, we'll simulate getting the recognition result
-      const imageUri = "mock-image-uri";
-      
       // Simulate camera shutter effect
       setCameraActive(false);
       setTimeout(() => setCameraActive(true), 150);
+      
+      // Take a photo using Capacitor Camera API
+      const image = await Camera.getPhoto({
+        quality: 90,
+        allowEditing: false,
+        resultType: CameraResultType.Uri,
+        source: CameraSource.Camera
+      });
+      
+      // The image.webPath will contain the path to the photo
+      const imageUri = image.webPath || "";
+      setPhotoUrl(imageUri);
       
       // Process the image with TensorFlow
       const { item, confidence } = await tensorflowHelper.recognizeImage(imageUri);
@@ -37,8 +64,8 @@ const CameraView = () => {
       navigate('/result', { state: { result } });
       
     } catch (error) {
+      console.error("Camera error:", error);
       toast.error("Failed to analyze image. Please try again.");
-      console.error(error);
       setIsAnalyzing(false);
     }
   };
@@ -58,17 +85,26 @@ const CameraView = () => {
             {/* Camera flash effect */}
           </div>
           
-          {/* This would be a real camera view in a native app */}
+          {/* This would show the camera preview in a real app */}
           <div className="h-full flex items-center justify-center bg-gray-900">
-            <div className="relative">
-              <img 
-                src="/placeholder.svg" 
-                alt="Camera Feed" 
-                className="min-h-[300px] w-full object-cover opacity-60"
-              />
+            <div className="relative w-full h-full">
+              {photoUrl ? (
+                <img 
+                  src={photoUrl} 
+                  alt="Captured" 
+                  className="w-full h-full object-cover"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center">
+                  <p className="text-white text-center p-4">
+                    Camera preview will appear here on a real device. <br/>
+                    Tap the button below to capture an image.
+                  </p>
+                </div>
+              )}
               
               {/* Scanning overlay */}
-              <div className="absolute inset-0 flex items-center justify-center">
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <div className="w-64 h-64 border-2 border-retailVision-secondary rounded-lg flex items-center justify-center">
                   <div className={`w-full ${isAnalyzing ? 'h-1 animate-pulse-light bg-retailVision-secondary' : ''}`} />
                 </div>
