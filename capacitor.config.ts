@@ -2,7 +2,7 @@
 import { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
-  appId: 'app.lovable.30ef66ec4a9e41cb8dbf87c1022e0467',
+  appId: 'com.lovable.retailscanindia',
   appName: 'retail-scan-vision-india',
   webDir: 'dist',
   server: {
