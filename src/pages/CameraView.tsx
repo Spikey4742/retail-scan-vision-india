@@ -22,13 +22,25 @@ const CameraView = () => {
         if (permissions.camera !== 'granted') {
           toast.error("Camera permission is required to scan items");
         }
-      } catch (error) {
+      }
+      catch (error) {
         console.error("Error requesting camera permissions:", error);
         toast.error("Failed to access camera. Please check your permissions.");
       }
     };
 
+    // Start loading the model in background when component mounts
+    const preloadModel = async () => {
+      try {
+        await tensorflowHelper.loadModel();
+        console.log("TensorFlow model pre-loaded successfully");
+      } catch (error) {
+        console.error("Error pre-loading model:", error);
+      }
+    };
+
     requestPermissions();
+    preloadModel();
   }, []);
 
   const handleCapture = async () => {
@@ -50,6 +62,8 @@ const CameraView = () => {
       // The image.webPath will contain the path to the photo
       const imageUri = image.webPath || "";
       setPhotoUrl(imageUri);
+      
+      toast.info("Processing image...");
       
       // Process the image with TensorFlow
       const { item, confidence } = await tensorflowHelper.recognizeImage(imageUri);
