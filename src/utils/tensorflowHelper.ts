@@ -2,6 +2,7 @@
 import * as tf from '@tensorflow/tfjs';
 import { GroceryItem } from "../types";
 import { groceryItems } from "../data/groceryItems";
+import { toast } from "sonner";
 
 // TensorFlow Helper implementation for custom model
 export class TensorflowHelper {
@@ -19,16 +20,15 @@ export class TensorflowHelper {
       this.isLoading = true;
       console.log("Loading custom TensorFlow model...");
       
-      // This path should point to your custom model.json
-      // For development, you can use indexeddb:// for models saved in browser storage
-      // For production, you would upload the model files to a server
-      // Example: this.model = await tf.loadLayersModel('indexeddb://my-grocery-model');
+      // Load the model from the finalData folder
+      // Note: In production, you would host these files on a server
+      // For development, we're assuming the files are in the public folder
+      this.model = await tf.loadLayersModel('/finalData/model.json');
       
-      // Temporarily return false until model is trained and available
-      this.isLoaded = false;
+      console.log("Custom model loaded successfully!");
+      this.isLoaded = true;
       this.isLoading = false;
-      console.log("Custom model not yet available. Please train the model first.");
-      return false;
+      return true;
     } catch (error) {
       console.error("Error loading custom TensorFlow model:", error);
       this.isLoading = false;
@@ -69,7 +69,7 @@ export class TensorflowHelper {
       console.log("Image loaded, running inference with custom model...");
       
       // Preprocess the image to match your custom model's input requirements
-      // Adjust these parameters based on how you trained your model
+      // Adjust these parameters based on how you trained your model (likely 224x224 for MobileNet-based models)
       const tensor = tf.browser.fromPixels(img)
         .resizeBilinear([224, 224])
         .toFloat()
@@ -90,7 +90,7 @@ export class TensorflowHelper {
       const [maxProb, classId] = this.findMaxProbability(data);
       
       // Map to actual grocery item
-      const matchingItem = this.mapCustomClassToGroceryItem(classId);
+      const matchingItem = this.mapClassIdToGroceryItem(classId);
       console.log("Matched to item:", matchingItem.name, "with confidence:", maxProb);
       
       return {
@@ -119,11 +119,14 @@ export class TensorflowHelper {
   }
   
   // Map your custom model's class to a grocery item
-  private mapCustomClassToGroceryItem(classId: number): GroceryItem {
-    // Map your custom class ID to the corresponding grocery item
-    // For now just returning items based on index, but you should implement proper mapping
-    const itemId = classId < groceryItems.length ? classId : 0;
-    return groceryItems[itemId];
+  private mapClassIdToGroceryItem(classId: number): GroceryItem {
+    // For a 2-class model, map each class to a specific grocery item
+    // You'll want to update this mapping with your actual trained classes
+    if (classId === 0) {
+      return groceryItems[0]; // First class maps to first grocery item
+    } else {
+      return groceryItems[1]; // Second class maps to second grocery item
+    }
   }
   
   // Save the trained model
@@ -141,12 +144,10 @@ export class TensorflowHelper {
     }
   }
 
-  // Training functions will go here
+  // Placeholder for training function
   async trainModelForTwoItems(): Promise<tf.LayersModel | null> {
     try {
       console.log("Starting model training for two items...");
-      // This would be implemented based on your training data
-      // For now returning null
       toast.info("Model training not yet implemented. Please follow the training steps.");
       return null;
     } catch (error) {
