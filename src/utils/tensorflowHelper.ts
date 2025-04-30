@@ -4,53 +4,19 @@ import { GroceryItem } from "../types";
 import { groceryItems } from "../data/groceryItems";
 import { toast } from "sonner";
 
-// TensorFlow Helper implementation for custom model
+// Color detection helper that replaces TensorFlow model
 export class TensorflowHelper {
-  private model: tf.LayersModel | null = null;
-  private isLoaded: boolean = false;
+  private isLoaded: boolean = true;
   private isLoading: boolean = false;
-  private classLabels: string[] = ['item1', 'item2']; // Your custom item classes
 
-  // Load your custom trained model
+  // We're not loading a model anymore, just detecting colors
   async loadModel(): Promise<boolean> {
-    if (this.isLoaded) return true;
-    if (this.isLoading) return false;
-
-    try {
-      this.isLoading = true;
-      console.log("Loading custom TensorFlow model...");
-      
-      // Load the model from the finalData folder
-      // Note: In production, you would host these files on a server
-      // For development, we're assuming the files are in the public folder
-      this.model = await tf.loadLayersModel('/finalData/model.json');
-      
-      console.log("Custom model loaded successfully!");
-      this.isLoaded = true;
-      this.isLoading = false;
-      return true;
-    } catch (error) {
-      console.error("Error loading custom TensorFlow model:", error);
-      this.isLoading = false;
-      return false;
-    }
+    // Always return true since we're not using a model
+    return true;
   }
 
-  // Method to recognize images with your custom model
+  // Method to detect colors and recognize items based on color
   async recognizeImage(imageUri: string): Promise<{ item: GroceryItem, confidence: number }> {
-    if (!this.isLoaded) {
-      const loaded = await this.loadModel();
-      if (!loaded) {
-        console.log("Custom model not loaded, returning fallback result");
-        return this.getFallbackResult();
-      }
-    }
-
-    if (!this.model) {
-      console.error("Model not loaded, returning fallback result");
-      return this.getFallbackResult();
-    }
-
     try {
       // Create an HTMLImageElement from the image URI
       const img = new Image();
@@ -66,92 +32,94 @@ export class TensorflowHelper {
         img.src = imageUri;
       });
       
-      console.log("Image loaded, running inference with custom model...");
+      console.log("Image loaded, analyzing colors...");
       
-      // Preprocess the image to match your custom model's input requirements
-      // Adjust these parameters based on how you trained your model (likely 224x224 for MobileNet-based models)
-      const tensor = tf.browser.fromPixels(img)
-        .resizeBilinear([224, 224])
-        .toFloat()
-        .div(255.0)
-        .expandDims();
+      // Create a canvas to analyze the image
+      const canvas = document.createElement('canvas');
+      const context = canvas.getContext('2d');
       
-      // Run inference
-      const predictions = await this.model.predict(tensor) as tf.Tensor;
-      const data = await predictions.data() as Float32Array;
+      if (!context) {
+        throw new Error('Could not get canvas context');
+      }
       
-      // Cleanup tensors
-      tensor.dispose();
-      predictions.dispose();
+      // Set canvas dimensions to match image
+      canvas.width = img.width;
+      canvas.height = img.height;
       
-      console.log("Custom model inference complete:", data);
+      // Draw image on canvas
+      context.drawImage(img, 0, 0, img.width, img.height);
       
-      // Find the class with highest probability
-      const [maxProb, classId] = this.findMaxProbability(data);
+      // Get image data for color analysis
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+      const data = imageData.data;
       
-      // Map to actual grocery item
-      const matchingItem = this.mapClassIdToGroceryItem(classId);
-      console.log("Matched to item:", matchingItem.name, "with confidence:", maxProb);
+      // Variables to count red and green pixels
+      let redPixels = 0;
+      let greenPixels = 0;
+      
+      // Analyze every pixel in the image
+      for (let i = 0; i < data.length; i += 4) {
+        const red = data[i];
+        const green = data[i + 1];
+        const blue = data[i + 2];
+        
+        // Detect red pixels (high red value, low green and blue)
+        if (red > 150 && green < 100 && blue < 100) {
+          redPixels++;
+        }
+        
+        // Detect light green pixels (low red, high green, low blue)
+        if (red < 100 && green > 150 && blue < 150) {
+          greenPixels++;
+        }
+      }
+      
+      console.log(`Color analysis complete: Red pixels: ${redPixels}, Green pixels: ${greenPixels}`);
+      
+      // Determine which color is more prominent
+      let item: GroceryItem;
+      let confidence: number;
+      
+      if (redPixels > greenPixels) {
+        // Return Red Lays
+        item = this.getItemByName("Red Lays") || groceryItems[0];
+        confidence = redPixels / (redPixels + greenPixels + 1);
+        console.log("Detected red color, showing Red Lays");
+      } else {
+        // Return Greens Lays
+        item = this.getItemByName("Greens Lays") || groceryItems[1];
+        confidence = greenPixels / (redPixels + greenPixels + 1);
+        console.log("Detected green color, showing Greens Lays");
+      }
       
       return {
-        item: matchingItem,
-        confidence: maxProb
+        item,
+        confidence: Math.min(confidence, 0.99)
       };
     } catch (error) {
-      console.error("Error recognizing image with custom model:", error);
+      console.error("Error during color detection:", error);
       return this.getFallbackResult();
     }
   }
 
-  // Find the highest probability class
-  private findMaxProbability(predictions: Float32Array): [number, number] {
-    let maxProb = -1;
-    let classId = -1;
-    
-    for (let i = 0; i < predictions.length; i++) {
-      if (predictions[i] > maxProb) {
-        maxProb = predictions[i];
-        classId = i;
-      }
-    }
-    
-    return [maxProb, classId];
+  // Helper method to find an item by name
+  private getItemByName(name: string): GroceryItem | undefined {
+    return groceryItems.find(item => item.name === name || item.name.includes(name));
   }
   
-  // Map your custom model's class to a grocery item
-  private mapClassIdToGroceryItem(classId: number): GroceryItem {
-    // For a 2-class model, map each class to a specific grocery item
-    // You'll want to update this mapping with your actual trained classes
-    if (classId === 0) {
-      return groceryItems[0]; // First class maps to first grocery item
-    } else {
-      return groceryItems[1]; // Second class maps to second grocery item
-    }
-  }
-  
-  // Save the trained model
+  // Save the trained model - no longer needed but kept for API compatibility
   async saveModel(model: tf.LayersModel): Promise<boolean> {
-    try {
-      // Save to IndexedDB for browser storage
-      await model.save('indexeddb://my-grocery-model');
-      console.log('Model saved to IndexedDB');
-      this.model = model;
-      this.isLoaded = true;
-      return true;
-    } catch (error) {
-      console.error('Error saving model:', error);
-      return false;
-    }
+    return true;
   }
 
-  // Placeholder for training function
+  // Training function - no longer needed but kept for API compatibility
   async trainModelForTwoItems(): Promise<tf.LayersModel | null> {
     try {
-      console.log("Starting model training for two items...");
-      toast.info("Model training not yet implemented. Please follow the training steps.");
+      console.log("Color detection is now being used instead of model training");
+      toast.info("Color detection is enabled. Point camera at red or green objects.");
       return null;
     } catch (error) {
-      console.error("Error training model:", error);
+      console.error("Error:", error);
       return null;
     }
   }
