@@ -5,7 +5,7 @@ import { groceryItems } from "../data/groceryItems";
 
 // TensorFlow Helper implementation
 export class TensorflowHelper {
-  private model: tf.GraphModel | null = null;
+  private model: tf.GraphModel | tf.LayersModel | null = null;
   private isLoaded: boolean = false;
   private isLoading: boolean = false;
 
@@ -17,10 +17,9 @@ export class TensorflowHelper {
       this.isLoading = true;
       console.log("Loading TensorFlow model...");
       
-      // Use MobileNet directly from TensorFlow.js models
-      // Using a more stable URL for the model to prevent "Failed to fetch" errors
-      this.model = await tf.loadGraphModel(
-        'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_1.0_224/model.json'
+      // Use MobileNet v2 which is more reliable
+      this.model = await tf.loadLayersModel(
+        'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_0.25_224/model.json'
       );
       
       this.isLoaded = true;
@@ -36,12 +35,15 @@ export class TensorflowHelper {
 
   async recognizeImage(imageUri: string): Promise<{ item: GroceryItem, confidence: number }> {
     if (!this.isLoaded) {
-      await this.loadModel();
+      const loaded = await this.loadModel();
+      if (!loaded) {
+        console.error("Model failed to load, returning fallback result");
+        return this.getFallbackResult();
+      }
     }
 
     if (!this.model) {
       console.error("Model not loaded, returning fallback result");
-      // Return a fallback result in case of error
       return this.getFallbackResult();
     }
 
@@ -69,12 +71,12 @@ export class TensorflowHelper {
         .expandDims();
         
       // Normalize the image from [0, 255] to [-1, 1]
-      const normalized = tensor.div(127.5).sub(1);
+      const normalized = tf.div(tensor, 127.5).sub(1);
       
       // Run inference
       const predictions = await this.model.predict(normalized) as tf.Tensor;
       
-      // Fix the error by explicitly converting to Float32Array
+      // Get data as Float32Array to fix type error
       const data = await predictions.data() as Float32Array;
       
       // Cleanup tensors to prevent memory leaks
