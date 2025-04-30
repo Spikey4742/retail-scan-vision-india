@@ -18,9 +18,9 @@ export class TensorflowHelper {
       console.log("Loading TensorFlow model...");
       
       // Use MobileNet directly from TensorFlow.js models
+      // Using a more stable URL for the model to prevent "Failed to fetch" errors
       this.model = await tf.loadGraphModel(
-        'https://tfhub.dev/google/imagenet/mobilenet_v2_100_224/classification/5', 
-        { fromTFHub: true }
+        'https://storage.googleapis.com/tfjs-models/tfjs/mobilenet_v1_1.0_224/model.json'
       );
       
       this.isLoaded = true;
@@ -73,7 +73,9 @@ export class TensorflowHelper {
       
       // Run inference
       const predictions = await this.model.predict(normalized) as tf.Tensor;
-      const data = await predictions.data();
+      
+      // Fix the error by explicitly converting to Float32Array
+      const data = await predictions.data() as Float32Array;
       
       // Cleanup tensors to prevent memory leaks
       tensor.dispose();
